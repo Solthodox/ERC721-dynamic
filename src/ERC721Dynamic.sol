@@ -6,14 +6,14 @@ import "@openzeppelin/contracts/utils/Strings.sol";
 import "@openzeppelin/contracts/utils/Base64.sol";
 
 
-contract ERC721DynamicSoulbound{
+contract ERC721DynamicSoulbound is ERC721{
     error NonTransferible();
     using Counters for Counters.Counter;
     Counters.Counter private _idCounter;
 
     using Strings for uint256;
 
-    uint256 public constant MINT_PRICE;
+    uint256 public constant MINT_PRICE = 1 ether/100;
 
 
     struct NFTStorage{
@@ -30,8 +30,9 @@ contract ERC721DynamicSoulbound{
     constructor(string memory name, string memory symbol) ERC721(name,symbol){}
 
 
-    function safeMint(string memory name, string memory description, string memory imageIPFS, string[] memory certificates, string[] memory education) external payable {
+    function mint(string memory name, string memory description, string memory imageIPFS) external  payable returns(bool) {
         require(msg.value >= MINT_PRICE, "msgvalue<price");
+        require(balanceOf(msg.sender)==0, "Caller already owns an NFT");
         _idCounter.increment();
         uint256 currentId = _idCounter.current();
 
@@ -39,10 +40,13 @@ contract ERC721DynamicSoulbound{
             name:name,
             description:description,
             imageIPFS : imageIPFS,
-            creationData : bloc.timestamp;
+            certificates : "",
+            experience : "",
+            creationDate : block.timestamp
         });
         _tokensData[currentId] = data;
-        _safeMint(msg.sender, currentId);
+        _mint(msg.sender, currentId);
+        return true;
     }
 
        
@@ -51,24 +55,37 @@ contract ERC721DynamicSoulbound{
 
       bytes memory tokenURI = abi.encodePacked(
         '{',
-            '"name": "', data.name, '",",
-            '"description": "', data.description, '",",
-            '"image": "ipfs://', data.imageIPFS, '",",
-            '"certificates": "', data.certificates, '",",
-            '"experience": "', data.experience, '",",
-            '"creationDate": "', data.creationDate.toString(), '",",
+            '"name": "', data.name, '",',
+            '"description": "', data.description, '",',
+            '"image": "ipfs://', data.imageIPFS, '",',
+            '"certificates": [', data.certificates, '],',
+            '"experience": [', data.experience, '],',
+            '"creationDate": "', data.creationDate.toString(), '",',
         '}'
       );
 
       return string(
         abi.encodePacked(
             "data:application/json;base64,",
-            Base64.encodePacked(tokenURI)    
+            Base64.encode(tokenURI)    
         )
       );
 
     }
 
+
+    function addCertificate(uint256 tokenId, string memory data) external{
+        require(ownerOf(tokenId)==msg.sender, "You dont own this token");
+        string memory str = string.concat('{',data, '},' );
+        _tokensData[tokenId].certificates = string.concat(_tokensData[tokenId].experience, str);
+
+    }
+
+    function addExperience(uint256 tokenId, string memory data) external{
+        require(ownerOf(tokenId)==msg.sender, "You dont own this token");
+        string memory str = string.concat('{',data, '},' );
+        _tokensData[tokenId].experience = string.concat(_tokensData[tokenId].experience, str);
+    }
 
 
     // override the transfer functions to make sure it cant be transferred
